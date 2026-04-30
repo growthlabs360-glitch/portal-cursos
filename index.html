@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portal de Cursos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#0a0a0a;--bg2:#111;--bg3:#1a1a1a;--bg4:#222;
+  --orange:#FF6B2B;--orange-dk:#CC4A10;--orange-glow:rgba(255,107,43,.35);
+  --text:#F5F0EB;--text-muted:#9a9490;--border:#2a2a2a;
+  --red:#cc2222;--green:#22cc66;
+  --sidebar-w:300px;--header-h:64px;--radius:12px;--trans:250ms ease;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.6}
+body::after{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");pointer-events:none;z-index:9999;opacity:.6}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:var(--bg2)}::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:4px}::-webkit-scrollbar-thumb:hover{background:var(--orange)}
+
+/* SCREENS */
+.screen{position:fixed;inset:0;opacity:0;pointer-events:none;transition:opacity 400ms ease;z-index:10}
+.screen.active{opacity:1;pointer-events:all;z-index:20}
+
+/* ── LOGIN SCREEN ── */
+#loginScreen{display:flex;align-items:center;justify-content:center;background:var(--bg);background-image:radial-gradient(ellipse 60% 50% at 50% -10%,rgba(255,107,43,.18) 0%,transparent 70%)}
+.login-box{width:100%;max-width:440px;padding:44px 40px;background:var(--bg2);border:1px solid var(--border);border-radius:20px;box-shadow:0 0 60px rgba(0,0,0,.6);text-align:center;position:relative;overflow:hidden}
+.login-box::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--orange),transparent)}
+.login-logo{font-family:'Bebas Neue',sans-serif;font-size:40px;letter-spacing:3px;color:var(--text);margin-bottom:20px}
+.login-logo span{color:var(--orange)}
+.auth-tabs{display:flex;gap:3px;background:var(--bg3);border-radius:10px;padding:4px;margin-bottom:28px}
+.auth-tab{flex:1;padding:9px 12px;border:none;border-radius:7px;background:transparent;color:var(--text-muted);font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all var(--trans)}
+.auth-tab.active{background:var(--orange);color:#fff}
+.auth-form{display:none}
+.auth-form.active{display:block}
+.form-field{margin-bottom:14px;text-align:left}
+.form-field label{display:block;font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text-muted);margin-bottom:7px}
+.auth-input{width:100%;padding:13px 16px;background:var(--bg3);border:1.5px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:15px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color var(--trans),box-shadow var(--trans)}
+.auth-input:focus{border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-glow)}
+.auth-btn{width:100%;margin-top:6px;padding:14px;background:var(--orange);border:none;border-radius:var(--radius);color:#fff;font-size:15px;font-weight:700;font-family:'DM Sans',sans-serif;cursor:pointer;transition:background var(--trans),transform var(--trans),box-shadow var(--trans)}
+.auth-btn:hover{background:var(--orange-dk);transform:translateY(-1px);box-shadow:0 6px 24px rgba(255,107,43,.4)}
+.auth-btn:active{transform:translateY(0)}
+.auth-btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
+.auth-msg{margin-top:12px;min-height:18px;font-size:13px;text-align:center}
+.auth-msg.error{color:#ff5555}
+.auth-msg.success{color:var(--green)}
+/* Code hint box */
+.code-hint{background:rgba(255,107,43,.08);border:1px solid rgba(255,107,43,.25);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text-muted);text-align:left;margin-bottom:14px;line-height:1.5}
+.code-hint strong{color:var(--orange)}
+
+/* ── LOADING ── */
+#loadingOverlay{position:fixed;inset:0;background:rgba(10,10,10,.9);z-index:800;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;opacity:0;pointer-events:none;transition:opacity 300ms ease}
+#loadingOverlay.show{opacity:1;pointer-events:all}
+.spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--orange);border-radius:50%;animation:spin 700ms linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-size:14px;color:var(--text-muted)}
+
+/* ── HEADER ── */
+#appScreen{display:flex;flex-direction:column;height:100%}
+.header{position:fixed;top:0;left:0;right:0;height:var(--header-h);background:rgba(10,10,10,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:12px;z-index:100}
+.header-logo{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:2px;white-space:nowrap;flex-shrink:0;cursor:pointer}
+.header-logo span{color:var(--orange)}
+.header-progress{flex:1;display:flex;align-items:center;gap:12px;max-width:420px;margin:0 auto}
+.progress-label{font-size:12px;color:var(--text-muted);white-space:nowrap}
+.progress-bar-wrap{flex:1;height:6px;background:var(--bg4);border-radius:99px;overflow:hidden}
+.progress-bar-fill{height:100%;background:linear-gradient(90deg,var(--orange-dk),var(--orange));border-radius:99px;transition:width 600ms cubic-bezier(.4,0,.2,1)}
+.header-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.btn-hdr{padding:8px 14px;background:transparent;border:1.5px solid var(--border);border-radius:8px;color:var(--text-muted);font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;letter-spacing:.4px;cursor:pointer;transition:all var(--trans);display:flex;align-items:center;gap:5px}
+.btn-hdr:hover{border-color:var(--orange);color:var(--orange)}
+.btn-hdr.active{background:rgba(255,107,43,.12);border-color:var(--orange);color:var(--orange)}
+.user-badge{font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:99px;background:var(--bg3);border:1px solid var(--border)}
+.role-dot{width:7px;height:7px;border-radius:50%;background:var(--text-muted)}
+.role-dot.admin{background:var(--orange)}
+.hamburger{display:none;flex-direction:column;gap:5px;background:none;border:none;cursor:pointer;padding:4px}
+.hamburger span{display:block;width:22px;height:2px;background:var(--text);border-radius:2px;transition:all var(--trans)}
+.hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+.hamburger.open span:nth-child(2){opacity:0}
+.hamburger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+
+/* ── LAYOUT ── */
+.app-body{display:flex;margin-top:var(--header-h);height:calc(100vh - var(--header-h));overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sidebar-w);flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column;transition:transform var(--trans)}
+.sidebar-inner{padding:16px 0 80px}
+.sidebar-section-label{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-muted);padding:8px 20px 12px}
+.module-item{margin-bottom:4px}
+.module-header{display:flex;align-items:center;gap:8px;padding:12px 14px 12px 12px;cursor:pointer;transition:background var(--trans)}
+.module-header:hover{background:var(--bg3)}
+.module-chevron{width:18px;height:18px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:transform var(--trans);color:var(--text-muted);font-size:11px}
+.module-item.open .module-chevron{transform:rotate(90deg)}
+.module-meta{flex:1;min-width:0}
+.module-name{font-size:13px;font-weight:600;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.module-sub{font-size:11px;color:var(--text-muted);margin-top:2px}
+.module-badge{font-size:10px;font-weight:700;background:var(--orange);color:#fff;padding:2px 7px;border-radius:99px;flex-shrink:0;opacity:0;transition:opacity .3s}
+.module-badge.show{opacity:1}
+.module-prog{margin:0 20px 10px;height:3px;background:var(--bg4);border-radius:99px;overflow:hidden}
+.module-prog-fill{height:100%;background:var(--orange);border-radius:99px;transition:width 500ms ease}
+.lessons-list{overflow:hidden;max-height:0;transition:max-height 350ms cubic-bezier(.4,0,.2,1)}
+.module-item.open .lessons-list{max-height:1400px}
+.lesson-item{display:flex;align-items:center;gap:10px;padding:10px 12px 10px 42px;cursor:pointer;transition:background var(--trans);position:relative;border-left:2px solid transparent}
+.lesson-item:hover{background:var(--bg3)}
+.lesson-item.active{background:rgba(255,107,43,.08);border-left-color:var(--orange)}
+.lesson-item.active::after{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--orange);box-shadow:0 0 8px 1px var(--orange)}
+.lesson-item.active .lesson-title{color:var(--orange)}
+.lesson-check{width:18px;height:18px;flex-shrink:0;border:1.5px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;color:transparent;transition:all var(--trans);cursor:pointer;position:relative;z-index:2}
+.lesson-check.done{background:var(--orange);border-color:var(--orange);color:#fff}
+.lesson-info{flex:1;min-width:0}
+.lesson-title{font-size:13px;line-height:1.3;transition:color var(--trans)}
+.lesson-duration{font-size:11px;color:var(--text-muted);margin-top:1px}
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:98}
+
+/* ── MAIN ── */
+.main{flex:1;overflow-y:auto;padding:28px 32px 60px}
+
+/* ── DASHBOARD ── */
+#viewDashboard{display:none}
+#viewDashboard.active{display:block}
+.dash-greeting{font-family:'Bebas Neue',sans-serif;font-size:52px;letter-spacing:2px;line-height:1;margin-bottom:6px}
+.dash-greeting span{color:var(--orange)}
+.dash-subtitle{color:var(--text-muted);font-size:15px;margin-bottom:32px}
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:32px}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:20px;transition:border-color var(--trans),transform var(--trans)}
+.stat-card:hover{border-color:var(--orange);transform:translateY(-2px)}
+.stat-value{font-family:'Bebas Neue',sans-serif;font-size:42px;color:var(--orange);line-height:1}
+.stat-label{font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;margin-top:4px}
+.btn-continue{display:inline-flex;align-items:center;gap:10px;padding:16px 32px;background:var(--orange);border:none;border-radius:var(--radius);color:#fff;font-size:16px;font-weight:700;font-family:'DM Sans',sans-serif;cursor:pointer;transition:background var(--trans),transform var(--trans),box-shadow var(--trans);margin-bottom:36px}
+.btn-continue:hover{background:var(--orange-dk);transform:translateY(-2px);box-shadow:0 8px 28px rgba(255,107,43,.45)}
+.dash-section-title{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px;margin-bottom:16px;color:var(--text-muted)}
+.modules-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
+.module-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:22px;cursor:pointer;transition:all var(--trans);position:relative;overflow:hidden}
+.module-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--orange);transform:scaleX(0);transform-origin:left;transition:transform var(--trans)}
+.module-card:hover{border-color:var(--orange);transform:translateY(-3px)}
+.module-card:hover::before{transform:scaleX(1)}
+.mc-num{font-family:'Bebas Neue',sans-serif;font-size:48px;color:rgba(255,107,43,.15);line-height:1;margin-bottom:8px}
+.mc-title{font-size:15px;font-weight:600;margin-bottom:6px}
+.mc-sub{font-size:12px;color:var(--text-muted);margin-bottom:14px}
+.mc-prog-wrap{height:4px;background:var(--bg4);border-radius:99px;overflow:hidden}
+.mc-prog-fill{height:100%;background:var(--orange);border-radius:99px;transition:width 600ms ease}
+
+/* ── LESSON VIEW ── */
+#viewLesson{display:none}
+#viewLesson.active{display:block}
+.video-wrap{position:relative;width:100%;padding-top:56.25%;background:var(--bg3);border-radius:16px;overflow:hidden;box-shadow:0 0 40px rgba(255,107,43,.15);border:1px solid rgba(255,107,43,.12);margin-bottom:24px}
+.video-wrap iframe,.video-wrap video{position:absolute;inset:0;width:100%;height:100%;border:none;object-fit:contain}
+.video-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-muted);gap:12px}
+.play-icon{font-size:56px;opacity:.3}
+.lesson-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}
+.lesson-h-title{font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:1px;line-height:1.1}
+.lesson-h-meta{font-size:13px;color:var(--text-muted);margin-top:4px}
+.btn-done{flex-shrink:0;display:flex;align-items:center;gap:8px;padding:10px 20px;background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;color:var(--text-muted);font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all var(--trans)}
+.btn-done:hover{border-color:var(--orange);color:var(--orange)}
+.btn-done.done{background:rgba(255,107,43,.12);border-color:var(--orange);color:var(--orange)}
+.lesson-desc{color:var(--text-muted);font-size:14px;line-height:1.7;margin-bottom:28px;padding-bottom:28px;border-bottom:1px solid var(--border)}
+.res-section-title{font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--text-muted);margin-bottom:12px}
+.res-list{display:flex;flex-direction:column;gap:8px;margin-bottom:32px}
+.res-item{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;cursor:pointer;transition:all var(--trans);color:var(--text)}
+.res-item:hover{border-color:var(--orange);background:rgba(255,107,43,.06)}
+.res-icon-box{width:34px;height:34px;background:rgba(255,107,43,.12);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.res-name{font-size:13px;font-weight:500}
+.res-type{font-size:11px;color:var(--text-muted)}
+.nav-btns{display:flex;justify-content:space-between;gap:12px;padding-top:8px}
+.nav-btn{display:flex;align-items:center;gap:8px;padding:12px 22px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg2);color:var(--text);font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all var(--trans)}
+.nav-btn:hover:not(:disabled){border-color:var(--orange);color:var(--orange)}
+.nav-btn:disabled{opacity:.3;cursor:not-allowed}
+.nav-btn.primary{background:var(--orange);border-color:var(--orange);color:#fff}
+.nav-btn.primary:hover:not(:disabled){background:var(--orange-dk);border-color:var(--orange-dk)}
+
+/* ── ADMIN PANEL ── */
+#viewAdmin{display:none}
+#viewAdmin.active{display:block}
+.admin-title{font-family:'Bebas Neue',sans-serif;font-size:46px;letter-spacing:2px;margin-bottom:4px}
+.admin-title span{color:var(--orange)}
+.admin-subtitle{font-size:13px;color:var(--text-muted);margin-bottom:28px}
+.admin-card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;margin-bottom:14px;overflow:hidden}
+.admin-mod-hdr{display:flex;align-items:center;gap:10px;padding:14px 20px;cursor:pointer;transition:background var(--trans)}
+.admin-mod-hdr:hover{background:var(--bg3)}
+.admin-chevron{font-size:11px;color:var(--text-muted);transition:transform var(--trans);width:16px;flex-shrink:0}
+.admin-card.open .admin-chevron{transform:rotate(90deg)}
+.admin-mod-title{flex:1;font-size:14px;font-weight:600}
+.admin-mod-meta{font-size:12px;color:var(--text-muted)}
+.admin-body{display:none;border-top:1px solid var(--border)}
+.admin-card.open .admin-body{display:block}
+.admin-lesson-row{display:flex;align-items:center;gap:10px;padding:12px 20px;border-bottom:1px solid var(--border)}
+.admin-lesson-row:last-of-type{border-bottom:none}
+.admin-lesson-info{flex:1;min-width:0}
+.admin-lesson-title{font-size:13px;font-weight:500}
+.admin-lesson-meta{font-size:11px;color:var(--text-muted);margin-top:2px}
+.vid-badge{display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:700}
+.vid-badge.youtube{background:rgba(255,60,60,.15);color:#ff5555}
+.vid-badge.vimeo{background:rgba(26,183,234,.15);color:#1ab7ea}
+.vid-badge.upload{background:rgba(255,107,43,.15);color:var(--orange)}
+.vid-badge.none{background:var(--bg4);color:var(--text-muted)}
+.btn-admin{padding:7px 13px;border-radius:8px;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;border:1.5px solid var(--border);background:var(--bg3);color:var(--text-muted);transition:all var(--trans)}
+.btn-admin:hover{border-color:var(--orange);color:var(--orange)}
+.btn-admin.danger:hover{border-color:var(--red);color:var(--red)}
+.btn-admin.primary{background:var(--orange);border-color:var(--orange);color:#fff}
+.btn-admin.primary:hover{background:var(--orange-dk)}
+.admin-footer{padding:14px 20px;display:flex;gap:8px}
+.btn-add-mod{width:100%;padding:14px;background:none;border:1.5px dashed var(--border);border-radius:12px;color:var(--text-muted);font-size:14px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all var(--trans);margin-top:4px}
+.btn-add-mod:hover{border-color:var(--orange);color:var(--orange)}
+
+/* ── MODALS ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:600;display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity 300ms ease}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal-box{background:var(--bg2);border:1px solid var(--border);border-radius:20px;width:100%;max-width:660px;max-height:calc(100vh - 40px);display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,.8);overflow:hidden;position:relative}
+.modal-box::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--orange),transparent)}
+.modal-hdr{display:flex;align-items:center;justify-content:space-between;padding:20px 28px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.modal-title{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:1px}
+.modal-x{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text-muted);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all var(--trans)}
+.modal-x:hover{border-color:#ff4444;color:#ff4444}
+.modal-body{flex:1;overflow-y:auto;padding:24px 28px;display:flex;flex-direction:column;gap:18px}
+.modal-footer{padding:16px 28px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0}
+/* Form */
+.fg{display:flex;flex-direction:column;gap:8px}
+.fg-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fg label{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text-muted)}
+.fg input,.fg textarea{background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;font-family:'DM Sans',sans-serif;padding:11px 14px;outline:none;transition:border-color var(--trans),box-shadow var(--trans);width:100%}
+.fg input:focus,.fg textarea:focus{border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-glow)}
+.fg textarea{resize:vertical;min-height:90px;line-height:1.6}
+.hint{font-size:11px;color:var(--text-muted);margin-top:5px;line-height:1.4}
+/* Video tabs */
+.vtabs{display:flex;gap:4px;background:var(--bg3);border-radius:10px;padding:4px;margin-bottom:10px}
+.vtab{flex:1;padding:8px 12px;border:none;border-radius:7px;background:transparent;color:var(--text-muted);font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all var(--trans)}
+.vtab.active{background:var(--orange);color:#fff}
+/* File drop */
+.file-drop{border:2px dashed var(--border);border-radius:12px;padding:22px;text-align:center;cursor:pointer;transition:all var(--trans);position:relative}
+.file-drop:hover,.file-drop.drag-over{border-color:var(--orange);background:rgba(255,107,43,.04)}
+.file-drop input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.file-drop-icon{font-size:24px;margin-bottom:6px}
+.file-drop-hint{font-size:13px;color:var(--text-muted);margin-bottom:10px}
+.file-drop-cta{padding:7px 16px;background:var(--bg4);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:'DM Sans',sans-serif;pointer-events:none}
+.file-current{display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,107,43,.08);border:1px solid rgba(255,107,43,.3);border-radius:8px;margin-top:8px;font-size:13px}
+.file-current-name{flex:1;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-rm{color:#ff4444;cursor:pointer;background:none;border:none;font-size:18px;line-height:1;flex-shrink:0}
+/* Resources editor */
+.res-edit-row{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;margin-bottom:8px}
+.res-icon-inp{width:36px;height:36px;background:var(--bg4);border:1px solid var(--border);border-radius:8px;text-align:center;font-size:18px;color:var(--text);font-family:'DM Sans',sans-serif;outline:none;padding:0;flex-shrink:0}
+.res-fields{flex:1;display:flex;flex-direction:column;gap:5px;min-width:0}
+.res-fields input{background:var(--bg4);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;padding:6px 10px;outline:none;transition:border-color var(--trans)}
+.res-fields input:focus{border-color:var(--orange)}
+.res-fields input.sm{font-size:12px;color:var(--text-muted)}
+.res-del{width:28px;height:28px;border:1px solid var(--border);border-radius:6px;background:var(--bg4);color:var(--text-muted);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all var(--trans);margin-top:2px}
+.res-del:hover{border-color:#ff4444;color:#ff4444}
+.btn-add-res{width:100%;padding:10px;background:none;border:1.5px dashed var(--border);border-radius:8px;color:var(--text-muted);font-size:13px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all var(--trans)}
+.btn-add-res:hover{border-color:var(--orange);color:var(--orange)}
+/* Buttons */
+.btn-primary{padding:10px 24px;background:var(--orange);border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:700;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all var(--trans)}
+.btn-primary:hover{background:var(--orange-dk);box-shadow:0 4px 16px rgba(255,107,43,.4)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.btn-secondary{padding:10px 20px;background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;color:var(--text-muted);font-size:14px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all var(--trans)}
+.btn-secondary:hover{border-color:var(--orange);color:var(--orange)}
+/* Confirm */
+.confirm-box{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:32px;max-width:360px;text-align:center;box-shadow:0 24px 80px rgba(0,0,0,.8)}
+.confirm-icon{font-size:36px;margin-bottom:12px}
+.confirm-title{font-size:18px;font-weight:700;margin-bottom:8px}
+.confirm-msg{font-size:14px;color:var(--text-muted);margin-bottom:24px;line-height:1.5}
+.confirm-btns{display:flex;gap:10px;justify-content:center}
+.btn-danger{padding:10px 22px;background:var(--red);border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:700;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all var(--trans)}
+.btn-danger:hover{background:#ff3333}
+
+/* ── CONFETTI + TOAST ── */
+#confetti-container{position:fixed;inset:0;pointer-events:none;z-index:9000;overflow:hidden}
+.confetti-piece{position:absolute;top:-10px;border-radius:2px;animation:confettiFall linear forwards}
+@keyframes confettiFall{0%{transform:translateY(0) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0}}
+.toast{position:fixed;bottom:28px;right:28px;background:var(--bg3);border:1px solid var(--orange);border-radius:12px;padding:14px 20px;font-size:13px;font-weight:500;box-shadow:0 8px 32px rgba(0,0,0,.5);transform:translateY(80px);opacity:0;transition:all 400ms cubic-bezier(.4,0,.2,1);z-index:9990;max-width:300px}
+.toast.show{transform:translateY(0);opacity:1}
+
+/* ── RESPONSIVE ── */
+@media(max-width:768px){
+  :root{--sidebar-w:280px}
+  .sidebar{position:fixed;top:var(--header-h);bottom:0;left:0;z-index:99;transform:translateX(-100%)}
+  .sidebar.mobile-open{transform:translateX(0)}
+  .sidebar-overlay{display:block}
+  .hamburger{display:flex}
+  .main{padding:20px 18px 60px}
+  .dash-greeting{font-size:36px}
+  .header-progress{display:none}
+  .lesson-h-title{font-size:24px}
+  .fg-row{grid-template-columns:1fr}
+  .user-badge{display:none}
+}
+@media(max-width:480px){
+  .stats-row{grid-template-columns:1fr 1fr}
+  .nav-btns{flex-direction:column}
+  .lesson-header{flex-direction:column}
+  .modal-box{max-height:100vh;border-radius:0}
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════ LOGIN / REGISTER ══════════════════ -->
+<div class="screen active" id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">CURSO<span>PRO</span></div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchTab('login')">Iniciar sesión</button>
+      <button class="auth-tab" onclick="switchTab('register')">Crear cuenta</button>
+    </div>
+
+    <!-- LOGIN -->
+    <div class="auth-form active" id="formLogin">
+      <div class="form-field"><label>Email</label>
+        <input class="auth-input" id="loginEmail" type="email" placeholder="tu@email.com" autocomplete="email"></div>
+      <div class="form-field"><label>Contraseña</label>
+        <input class="auth-input" id="loginPass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
+      <button class="auth-btn" id="loginBtn">Acceder →</button>
+      <div class="auth-msg" id="loginMsg"></div>
+    </div>
+
+    <!-- REGISTER -->
+    <div class="auth-form" id="formRegister">
+      <div class="code-hint">
+        🔐 Necesitas un <strong>código de acceso</strong> para registrarte.<br>
+        Consíguelo contactando con el creador del curso.
+      </div>
+      <div class="form-field"><label>Código de acceso</label>
+        <input class="auth-input" id="regCode" type="text" placeholder="Código proporcionado por el creador" autocomplete="off"></div>
+      <div class="form-field"><label>Email</label>
+        <input class="auth-input" id="regEmail" type="email" placeholder="tu@email.com" autocomplete="email"></div>
+      <div class="form-field"><label>Contraseña</label>
+        <input class="auth-input" id="regPass" type="password" placeholder="Mínimo 6 caracteres" autocomplete="new-password"></div>
+      <div class="form-field"><label>Confirmar contraseña</label>
+        <input class="auth-input" id="regPass2" type="password" placeholder="Repite la contraseña" autocomplete="new-password"></div>
+      <button class="auth-btn" id="registerBtn">Crear cuenta →</button>
+      <div class="auth-msg" id="registerMsg"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ APP ══════════════════ -->
+<div class="screen" id="appScreen">
+  <header class="header">
+    <button class="hamburger" id="hamburger"><span></span><span></span><span></span></button>
+    <div class="header-logo" id="headerLogo">CURSO<span>PRO</span></div>
+    <div class="header-progress">
+      <span class="progress-label" id="hdrLabel">0/0</span>
+      <div class="progress-bar-wrap"><div class="progress-bar-fill" id="hdrBar" style="width:0%"></div></div>
+      <span class="progress-label" id="hdrPct">0%</span>
+    </div>
+    <div class="header-actions">
+      <div class="user-badge"><span class="role-dot" id="roleDot"></span><span id="userEmailLabel">—</span></div>
+      <button class="btn-hdr" id="btnAdmin" style="display:none" onclick="showView('admin')">⚙️ Admin</button>
+      <button class="btn-hdr" id="btnLogout">⎋ Salir</button>
+    </div>
+  </header>
+
+  <div class="app-body">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-inner" id="sidebarInner"><div class="sidebar-section-label">Cargando…</div></div>
+    </aside>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+    <main class="main" id="mainContent">
+
+      <!-- DASHBOARD -->
+      <div id="viewDashboard">
+        <div class="dash-greeting">Bienvenido de <span>vuelta</span></div>
+        <p class="dash-subtitle">Continúa desde donde lo dejaste.</p>
+        <div class="stats-row" id="statsRow"></div>
+        <button class="btn-continue" id="btnContinue">▶ Continuar donde lo dejé</button>
+        <div class="dash-section-title">Módulos del curso</div>
+        <div class="modules-grid" id="modulesGrid"></div>
+      </div>
+
+      <!-- LESSON -->
+      <div id="viewLesson">
+        <div class="video-wrap" id="videoWrap">
+          <div class="video-placeholder"><div class="play-icon">▶</div><p>Selecciona una lección</p></div>
+        </div>
+        <div class="lesson-header">
+          <div><h1 class="lesson-h-title" id="lessonTitle">—</h1><p class="lesson-h-meta" id="lessonMeta">—</p></div>
+          <button class="btn-done" id="btnMarkDone">✓ Marcar completada</button>
+        </div>
+        <p class="lesson-desc" id="lessonDesc"></p>
+        <div class="res-section-title">Recursos de esta lección</div>
+        <div class="res-list" id="resList"></div>
+        <div class="nav-btns">
+          <button class="nav-btn" id="btnPrev">← Anterior</button>
+          <button class="nav-btn primary" id="btnNext">Siguiente →</button>
+        </div>
+      </div>
+
+      <!-- ADMIN -->
+      <div id="viewAdmin">
+        <div class="admin-title">Panel de <span>Admin</span></div>
+        <p class="admin-subtitle">Gestiona módulos, lecciones, vídeos y recursos del curso.</p>
+        <div id="adminList"></div>
+        <button class="btn-add-mod" id="btnAddMod">＋ Añadir nuevo módulo</button>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- ══════════════════ LESSON MODAL ══════════════════ -->
+<div class="modal-overlay" id="lessonModal">
+  <div class="modal-box">
+    <div class="modal-hdr">
+      <span class="modal-title" id="lessonModalTitle">Editar lección</span>
+      <button class="modal-x" onclick="closeModal('lessonModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="efLessonId">
+      <div class="fg-row">
+        <div class="fg"><label>Título</label><input id="efTitle" type="text" placeholder="Nombre de la lección"></div>
+        <div class="fg"><label>Duración</label><input id="efDuration" type="text" placeholder="ej: 15 min"></div>
+      </div>
+      <div class="fg"><label>Descripción</label><textarea id="efDesc" rows="4" placeholder="Describe qué aprenderán…"></textarea></div>
+      <div class="fg">
+        <label>Vídeo</label>
+        <div class="vtabs">
+          <button class="vtab active" id="vtabYT"  onclick="switchVTab('youtube')">▶ YouTube</button>
+          <button class="vtab"        id="vtabVim" onclick="switchVTab('vimeo')">🎞 Vimeo</button>
+          <button class="vtab"        id="vtabUp"  onclick="switchVTab('upload')">💻 Subir archivo</button>
+        </div>
+        <div id="vSrcYT"><input id="efVideoYT" type="text" placeholder="https://www.youtube.com/embed/VIDEO_ID">
+          <p class="hint">Copia el ID del vídeo de YouTube y sustitúyelo al final de la URL</p></div>
+        <div id="vSrcVim" style="display:none"><input id="efVideoVim" type="text" placeholder="https://player.vimeo.com/video/VIDEO_ID"></div>
+        <div id="vSrcUp" style="display:none">
+          <div class="file-drop" id="videoDropZone">
+            <input type="file" id="videoFileInput" accept="video/*">
+            <div class="file-drop-icon">🎬</div>
+            <p class="file-drop-hint">Arrastra tu vídeo aquí o haz clic para seleccionar</p>
+            <span class="file-drop-cta">Seleccionar vídeo</span>
+          </div>
+          <div class="file-current" id="videoCurrentFile" style="display:none">
+            <span>🎬</span><span class="file-current-name" id="videoCurrentName">—</span>
+            <button class="file-rm" id="videoRmBtn">✕</button>
+          </div>
+          <p class="hint" style="margin-top:8px">El vídeo se sube a Supabase Storage (privado). Se genera una URL firmada de 1h para reproducirlo.</p>
+        </div>
+      </div>
+      <div class="fg">
+        <label>Recursos y archivos adjuntos</label>
+        <div id="resEditorList"></div>
+        <button class="btn-add-res" id="btnAddRes">＋ Añadir recurso</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('lessonModal')">Cancelar</button>
+      <button class="btn-primary" id="btnSaveLesson">Guardar cambios ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ MODULE MODAL ══════════════════ -->
+<div class="modal-overlay" id="moduleModal">
+  <div class="modal-box" style="max-width:420px">
+    <div class="modal-hdr">
+      <span class="modal-title" id="moduleModalTitle">Módulo</span>
+      <button class="modal-x" onclick="closeModal('moduleModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="emId">
+      <div class="fg"><label>Nombre del módulo</label><input id="emTitle" type="text" placeholder="Nombre del módulo"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('moduleModal')">Cancelar</button>
+      <button class="btn-primary" id="btnSaveMod">Guardar ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ CONFIRM MODAL ══════════════════ -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="confirm-box">
+    <div class="confirm-icon" id="confirmIcon">🗑️</div>
+    <div class="confirm-title" id="confirmTitle">¿Estás seguro?</div>
+    <p class="confirm-msg" id="confirmMsg">Esta acción no se puede deshacer.</p>
+    <div class="confirm-btns">
+      <button class="btn-secondary" onclick="closeModal('confirmModal')">Cancelar</button>
+      <button class="btn-danger" id="confirmOkBtn">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<div id="loadingOverlay"><div class="spinner"></div><span class="loading-text" id="loadingText">Cargando…</span></div>
+<div id="confetti-container"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ══════════════════════════════════════════════════════════
+   ⚙️  CONFIGURACIÓN — EDITA ESTOS VALORES
+══════════════════════════════════════════════════════════ */
+
+// 🔑 Código que deben introducir los alumnos al registrarse
+//    Cámbialo cuando quieras; compártelo solo con tus alumnos
+const REGISTRATION_CODE = 'ESCALIA2025';
+
+// Para hacer a alguien admin, ejecuta en Supabase SQL Editor:
+// UPDATE user_roles SET role='admin'
+// WHERE user_id=(SELECT id FROM auth.users WHERE email='TU@EMAIL.COM');
+
+const SUPABASE_URL      = 'https://oxhfnzfuzsklqntzsdjs.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im94aGZuemZ1enNrbHFudHpzZGpzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1MDY5ODQsImV4cCI6MjA5MzA4Mjk4NH0._w_vViOZkBbWCSRLQ0jf2xPqjoVCEdXO_N-ih-OT86w';
+
+/* ══════════════════════════════════════════════════════════ */
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ── STATE ── */
+let currentUser   = null, userRole = 'student';
+let courseModules = [], completedSet = new Set();
+let currentLesson = null, currentView = 'dashboard';
+let editVTab = 'youtube', editVFile = null, editVRemoved = false, editRes = [];
+
+/* ── BOOT ── */
+(async function boot(){
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (session) {
+      currentUser = session.user;
+      await loadUserRole();
+      if (!document.getElementById('appScreen').classList.contains('active')) {
+        document.getElementById('loginScreen').classList.remove('active');
+        document.getElementById('appScreen').classList.add('active');
+        await initApp();
+      }
+    } else {
+      currentUser = null; userRole = 'student';
+      document.getElementById('appScreen').classList.remove('active');
+      document.getElementById('loginScreen').classList.add('active');
+      showLoading(false);
+    }
+  });
+  const { data:{ session } } = await sb.auth.getSession();
+  if (!session) document.getElementById('loginScreen').classList.add('active');
+})();
+
+async function initApp(){
+  showLoading(true,'Cargando curso…');
+  await Promise.all([loadCourseData(), loadProgress()]);
+  document.getElementById('userEmailLabel').textContent = currentUser.email;
+  document.getElementById('roleDot').className = 'role-dot'+(userRole==='admin'?' admin':'');
+  document.getElementById('btnAdmin').style.display = userRole==='admin'?'flex':'none';
+  buildSidebar(); buildDashboard(); updateHeader();
+  showView('dashboard'); showLoading(false);
+}
+
+/* ── AUTH ── */
+function switchTab(tab){
+  document.querySelectorAll('.auth-tab').forEach((t,i)=>t.classList.toggle('active',(i===0&&tab==='login')||(i===1&&tab==='register')));
+  document.getElementById('formLogin').classList.toggle('active',tab==='login');
+  document.getElementById('formRegister').classList.toggle('active',tab==='register');
+}
+
+document.getElementById('loginBtn').addEventListener('click', async ()=>{
+  const email=document.getElementById('loginEmail').value.trim();
+  const pass=document.getElementById('loginPass').value;
+  const msg=document.getElementById('loginMsg');
+  if(!email||!pass){showMsg(msg,'Rellena todos los campos','error');return}
+  const btn=document.getElementById('loginBtn');
+  btn.disabled=true;btn.textContent='Entrando…';
+  const {error}=await sb.auth.signInWithPassword({email,password:pass});
+  btn.disabled=false;btn.textContent='Acceder →';
+  if(error)showMsg(msg,tradErr(error.message),'error');
+});
+
+document.getElementById('loginEmail').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('loginBtn').click()});
+document.getElementById('loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('loginBtn').click()});
+
+document.getElementById('registerBtn').addEventListener('click', async ()=>{
+  const code=document.getElementById('regCode').value.trim();
+  const email=document.getElementById('regEmail').value.trim();
+  const pass=document.getElementById('regPass').value;
+  const pass2=document.getElementById('regPass2').value;
+  const msg=document.getElementById('registerMsg');
+
+  // ── Validar código de acceso ──
+  if (code.toUpperCase() !== REGISTRATION_CODE.toUpperCase()){
+    showMsg(msg,'❌ Código de acceso incorrecto. Contacta con el creador del curso.','error');
+    return;
+  }
+  if(!email||!pass||!pass2){showMsg(msg,'Rellena todos los campos','error');return}
+  if(pass!==pass2){showMsg(msg,'Las contraseñas no coinciden','error');return}
+  if(pass.length<6){showMsg(msg,'La contraseña debe tener al menos 6 caracteres','error');return}
+
+  const btn=document.getElementById('registerBtn');
+  btn.disabled=true;btn.textContent='Creando cuenta…';
+  const {error}=await sb.auth.signUp({email,password:pass});
+  btn.disabled=false;btn.textContent='Crear cuenta →';
+  if(error)showMsg(msg,tradErr(error.message),'error');
+  else showMsg(msg,'✅ Cuenta creada. Revisa tu email para confirmar la cuenta.','success');
+});
+
+document.getElementById('btnLogout').addEventListener('click',()=>sb.auth.signOut());
+
+function showMsg(el,txt,type){el.textContent=txt;el.className='auth-msg '+type}
+function tradErr(m){
+  if(m.includes('Invalid login'))return 'Email o contraseña incorrectos';
+  if(m.includes('Email not confirmed'))return 'Confirma tu email antes de acceder';
+  if(m.includes('already registered'))return 'Este email ya está registrado';
+  return m;
+}
+
+/* ── DATA ── */
+async function loadUserRole(){
+  const {data}=await sb.from('user_roles').select('role').eq('user_id',currentUser.id).maybeSingle();
+  userRole=data?.role||'student';
+}
+async function loadCourseData(){
+  const [{data:mods},{data:less},{data:ress}]=await Promise.all([
+    sb.from('modules').select('*').order('order_index'),
+    sb.from('lessons').select('*').order('order_index'),
+    sb.from('resources').select('*').order('order_index')
+  ]);
+  courseModules=(mods||[]).map(m=>({...m,
+    lessons:(less||[]).filter(l=>l.module_id===m.id).map(l=>({...l,
+      resources:(ress||[]).filter(r=>r.lesson_id===l.id)
+    }))
+  }));
+}
+async function loadProgress(){
+  if(!currentUser)return;
+  const {data}=await sb.from('user_progress').select('lesson_id').eq('user_id',currentUser.id).eq('completed',true);
+  completedSet=new Set((data||[]).map(p=>p.lesson_id));
+}
+
+/* ── HELPERS ── */
+const totalL=()=>courseModules.reduce((s,m)=>s+m.lessons.length,0);
+const doneC=()=>completedSet.size;
+const modDone=mi=>courseModules[mi].lessons.filter(l=>completedSet.has(l.id)).length;
+const isModDone=mi=>courseModules[mi].lessons.length>0&&courseModules[mi].lessons.every(l=>completedSet.has(l.id));
+function nextPending(){
+  for(let mi=0;mi<courseModules.length;mi++)
+    for(let li=0;li<courseModules[mi].lessons.length;li++)
+      if(!completedSet.has(courseModules[mi].lessons[li].id))return{mi,li};
+  return{mi:0,li:0};
+}
+function flatL(){const f=[];courseModules.forEach((m,mi)=>m.lessons.forEach((_,li)=>f.push({mi,li})));return f;}
+function vBadge(l){
+  if(!l.video_url&&!l.video_storage_path)return`<span class="vid-badge none">Sin vídeo</span>`;
+  if(l.video_type==='upload')return`<span class="vid-badge upload">💻 Subido</span>`;
+  if(l.video_type==='vimeo')return`<span class="vid-badge vimeo">🎞 Vimeo</span>`;
+  return`<span class="vid-badge youtube">▶ YouTube</span>`;
+}
+
+/* ── HEADER ── */
+function updateHeader(){
+  const total=totalL(),done=doneC(),pct=total?Math.round((done/total)*100):0;
+  document.getElementById('hdrLabel').textContent=`${done}/${total} lecciones`;
+  document.getElementById('hdrBar').style.width=pct+'%';
+  document.getElementById('hdrPct').textContent=pct+'%';
+}
+document.getElementById('headerLogo').addEventListener('click',()=>showView('dashboard'));
+
+/* ── SIDEBAR ── */
+function buildSidebar(){
+  const c=document.getElementById('sidebarInner');
+  if(!courseModules.length){c.innerHTML='<div class="sidebar-section-label">Sin contenido aún</div>';return}
+  c.innerHTML='<div class="sidebar-section-label">Contenido del curso</div>';
+  courseModules.forEach((mod,mi)=>{
+    const total=mod.lessons.length,done=modDone(mi),pct=total?Math.round((done/total)*100):0;
+    const isOpen=!currentLesson||currentLesson.mi===mi;
+    const el=document.createElement('div');
+    el.className='module-item'+(isOpen?' open':'');
+    el.innerHTML=`
+      <div class="module-header">
+        <span class="module-chevron">▶</span>
+        <div class="module-meta">
+          <div class="module-name">${mi+1}. ${mod.title}</div>
+          <div class="module-sub">${done}/${total} lecciones</div>
+        </div>
+        <span class="module-badge ${isModDone(mi)?'show':''}">COMPLETADO</span>
+      </div>
+      <div class="module-prog"><div class="module-prog-fill" style="width:${pct}%"></div></div>
+      <div class="lessons-list">
+        ${mod.lessons.map((l,li)=>`
+          <div class="lesson-item ${(currentLesson&&currentLesson.mi===mi&&currentLesson.li===li&&currentView==='lesson')?'active':''}" data-mi="${mi}" data-li="${li}">
+            <div class="lesson-check ${completedSet.has(l.id)?'done':''}" data-lid="${l.id}" data-mi="${mi}">${completedSet.has(l.id)?'✓':''}</div>
+            <div class="lesson-info">
+              <div class="lesson-title">${l.title}</div>
+              <div class="lesson-duration">⏱ ${l.duration}</div>
+            </div>
+          </div>`).join('')}
+      </div>`;
+    c.appendChild(el);
+    el.querySelector('.module-header').addEventListener('click',()=>el.classList.toggle('open'));
+  });
+  c.querySelectorAll('.lesson-item').forEach(el=>{
+    el.addEventListener('click',e=>{
+      if(e.target.classList.contains('lesson-check'))return;
+      openLesson(+el.dataset.mi,+el.dataset.li);
+    });
+  });
+  c.querySelectorAll('.lesson-check').forEach(el=>{
+    el.addEventListener('click',e=>{e.stopPropagation();toggleLesson(el.dataset.lid,+el.dataset.mi);});
+  });
+}
+
+/* ── DASHBOARD ── */
+function buildDashboard(){
+  const total=totalL(),done=doneC(),pct=total?Math.round((done/total)*100):0;
+  const mDone=courseModules.filter((_,i)=>isModDone(i)).length;
+  document.getElementById('statsRow').innerHTML=`
+    <div class="stat-card"><div class="stat-value">${done}</div><div class="stat-label">Lecciones completadas</div></div>
+    <div class="stat-card"><div class="stat-value">${mDone}</div><div class="stat-label">Módulos completados</div></div>
+    <div class="stat-card"><div class="stat-value">${pct}%</div><div class="stat-label">Progreso total</div></div>
+    <div class="stat-card"><div class="stat-value">${total-done}</div><div class="stat-label">Lecciones restantes</div></div>`;
+  document.getElementById('modulesGrid').innerHTML=courseModules.map((m,mi)=>{
+    const mT=m.lessons.length,mD=modDone(mi),mP=mT?Math.round((mD/mT)*100):0;
+    return`<div class="module-card" onclick="openLesson(${mi},0)">
+      <div class="mc-num">0${mi+1}</div><div class="mc-title">${m.title}</div>
+      <div class="mc-sub">${mD}/${mT} lecciones · ${mP}%</div>
+      <div class="mc-prog-wrap"><div class="mc-prog-fill" style="width:${mP}%"></div></div></div>`;
+  }).join('');
+  document.getElementById('btnContinue').onclick=()=>{const n=nextPending();openLesson(n.mi,n.li);};
+}
+
+/* ── VIEW SWITCHER ── */
+function showView(view){
+  currentView=view;
+  ['dashboard','lesson','admin'].forEach(v=>{
+    document.getElementById('view'+v.charAt(0).toUpperCase()+v.slice(1)).classList.toggle('active',v===view);
+  });
+  document.getElementById('mainContent').scrollTop=0;
+  buildDashboard();buildSidebar();
+  if(view==='admin')buildAdmin();
+  closeMobileSidebar();
+}
+
+/* ── LESSON VIEW ── */
+async function openLesson(mi,li){
+  currentLesson={mi,li};showView('lesson');
+  const lesson=courseModules[mi].lessons[li];
+  const vw=document.getElementById('videoWrap');
+  if(lesson.video_type==='upload'&&lesson.video_storage_path){
+    const {data}=await sb.storage.from('course-videos').createSignedUrl(lesson.video_storage_path,3600);
+    vw.innerHTML=data?.signedUrl?`<video src="${data.signedUrl}" controls></video>`
+      :`<div class="video-placeholder"><div class="play-icon">▶</div><p>Error cargando vídeo</p></div>`;
+  }else if(lesson.video_url){
+    vw.innerHTML=`<iframe src="${lesson.video_url}?rel=0&modestbranding=1" title="${lesson.title}" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe>`;
+  }else{
+    vw.innerHTML=`<div class="video-placeholder"><div class="play-icon">▶</div><p>Vídeo próximamente disponible</p></div>`;
+  }
+  document.getElementById('lessonTitle').textContent=lesson.title;
+  document.getElementById('lessonMeta').textContent=`Módulo ${mi+1}: ${courseModules[mi].title}  ·  ⏱ ${lesson.duration}`;
+  document.getElementById('lessonDesc').textContent=lesson.description||'';
+  const bd=document.getElementById('btnMarkDone');
+  renderDoneBtn(lesson.id,bd);
+  bd.onclick=()=>toggleLesson(lesson.id,mi);
+  const rl=document.getElementById('resList');
+  if(lesson.resources?.length){
+    rl.innerHTML='';
+    lesson.resources.forEach(r=>{
+      const el=document.createElement('div');el.className='res-item';
+      el.innerHTML=`<div class="res-icon-box">${r.icon||'📄'}</div><div><div class="res-name">${r.name}</div><div class="res-type">${r.type||''}</div></div>`;
+      el.addEventListener('click',async()=>{
+        if(r.storage_path){
+          const {data}=await sb.storage.from('course-resources').createSignedUrl(r.storage_path,300);
+          if(data?.signedUrl){const a=document.createElement('a');a.href=data.signedUrl;a.download=r.name;a.click();}
+          else showToast('⚠️ No se pudo descargar el archivo');
+        }else if(r.url)window.open(r.url,'_blank');
+      });
+      rl.appendChild(el);
+    });
+  }else{
+    rl.innerHTML='<p style="color:var(--text-muted);font-size:13px;">Sin recursos en esta lección.</p>';
+  }
+  const flat=flatL(),idx=flat.findIndex(f=>f.mi===mi&&f.li===li);
+  const bP=document.getElementById('btnPrev'),bN=document.getElementById('btnNext');
+  bP.disabled=idx===0;
+  bP.onclick=()=>{if(idx>0)openLesson(flat[idx-1].mi,flat[idx-1].li);};
+  const isLast=idx===flat.length-1,isLastInMod=li===courseModules[mi].lessons.length-1;
+  if(isLast){bN.textContent='🏆 Finalizar curso';bN.onclick=()=>{showToast('🎉 ¡Felicidades! Completaste el curso.');showView('dashboard');};}
+  else if(isLastInMod){bN.textContent='Siguiente módulo →';bN.onclick=()=>openLesson(flat[idx+1].mi,flat[idx+1].li);}
+  else{bN.textContent='Siguiente →';bN.onclick=()=>openLesson(flat[idx+1].mi,flat[idx+1].li);}
+  bN.disabled=false;bN.className='nav-btn primary';
+}
+
+function renderDoneBtn(lid,btn){
+  const d=completedSet.has(lid);
+  btn.textContent=d?'✓ Completada':'✓ Marcar completada';
+  btn.className='btn-done'+(d?' done':'');
+}
+async function toggleLesson(lid,mi){
+  const was=completedSet.has(lid);
+  if(was){await sb.from('user_progress').delete().match({user_id:currentUser.id,lesson_id:lid});completedSet.delete(lid);}
+  else{await sb.from('user_progress').upsert({user_id:currentUser.id,lesson_id:lid,completed:true,completed_at:new Date().toISOString()});completedSet.add(lid);}
+  renderDoneBtn(lid,document.getElementById('btnMarkDone'));
+  updateHeader();buildSidebar();
+  if(!was&&isModDone(mi)){triggerConfetti();showToast(`🎉 ¡Módulo "${courseModules[mi].title}" completado!`);}
+  buildDashboard();
+}
+
+/* ── ADMIN ── */
+function buildAdmin(){
+  const c=document.getElementById('adminList');c.innerHTML='';
+  courseModules.forEach((mod,mi)=>{
+    const card=document.createElement('div');card.className='admin-card open';
+    card.innerHTML=`
+      <div class="admin-mod-hdr">
+        <span class="admin-chevron">▶</span>
+        <span class="admin-mod-title">${mi+1}. ${mod.title}</span>
+        <span class="admin-mod-meta">${mod.lessons.length} lecciones</span>
+        <button class="btn-admin" onclick="event.stopPropagation();openModModal('${mod.id}','${mod.title.replace(/'/g,"\\'")}')">✏️ Editar</button>
+        <button class="btn-admin danger" onclick="event.stopPropagation();confirmDelMod('${mod.id}','${mod.title.replace(/'/g,"\\'")}')">🗑️</button>
+      </div>
+      <div class="admin-body">
+        ${mod.lessons.map((l,li)=>`
+          <div class="admin-lesson-row">
+            <div class="admin-lesson-info">
+              <div class="admin-lesson-title">${l.title}</div>
+              <div class="admin-lesson-meta">${l.duration} · ${vBadge(l)} · ${l.resources?.length||0} recursos</div>
+            </div>
+            <button class="btn-admin" onclick="openLessonModal('${mod.id}',${mi},${li})">✏️ Editar</button>
+            <button class="btn-admin danger" onclick="confirmDelLesson('${l.id}','${l.title.replace(/'/g,"\\'")}')">🗑️</button>
+          </div>`).join('')}
+        <div class="admin-footer">
+          <button class="btn-admin primary" onclick="addLesson('${mod.id}',${mi})">＋ Añadir lección</button>
+        </div>
+      </div>`;
+    card.querySelector('.admin-mod-hdr').addEventListener('click',()=>card.classList.toggle('open'));
+    c.appendChild(card);
+  });
+}
+document.getElementById('btnAddMod').addEventListener('click',()=>{
+  document.getElementById('emId').value='';
+  document.getElementById('emTitle').value='';
+  document.getElementById('moduleModalTitle').textContent='Nuevo módulo';
+  openModal('moduleModal');
+});
+function openModModal(id,title){
+  document.getElementById('emId').value=id;
+  document.getElementById('emTitle').value=title;
+  document.getElementById('moduleModalTitle').textContent='Editar módulo';
+  openModal('moduleModal');
+}
+document.getElementById('btnSaveMod').addEventListener('click',async()=>{
+  const id=document.getElementById('emId').value;
+  const title=document.getElementById('emTitle').value.trim();
+  if(!title){showToast('⚠️ El nombre no puede estar vacío');return}
+  const btn=document.getElementById('btnSaveMod');btn.disabled=true;btn.textContent='Guardando…';
+  if(id){await sb.from('modules').update({title,updated_at:new Date().toISOString()}).eq('id',id);}
+  else{const max=courseModules.reduce((m,mod)=>Math.max(m,mod.order_index),0);await sb.from('modules').insert({title,order_index:max+1});}
+  await loadCourseData();buildAdmin();buildSidebar();buildDashboard();
+  closeModal('moduleModal');showToast('✅ Módulo guardado');
+  btn.disabled=false;btn.textContent='Guardar ✓';
+});
+function confirmDelMod(id,title){
+  if(courseModules.length<=1){showToast('⚠️ Debe existir al menos un módulo');return}
+  showConfirm('🗑️','¿Eliminar módulo?',`"${title}" y todas sus lecciones se borrarán.`,async()=>{
+    await sb.from('modules').delete().eq('id',id);
+    await loadCourseData();buildAdmin();buildSidebar();buildDashboard();updateHeader();
+    showToast('🗑️ Módulo eliminado');
+  });
+}
+
+async function addLesson(moduleId,mi){
+  showLoading(true,'Creando lección…');
+  const max=courseModules[mi].lessons.reduce((m,l)=>Math.max(m,l.order_index),0);
+  const {data,error}=await sb.from('lessons').insert({
+    module_id:moduleId,title:'Nueva lección',duration:'10 min',
+    description:'',video_url:'',video_type:'youtube',order_index:max+1
+  }).select().single();
+  await loadCourseData();showLoading(false);
+  if(!error){buildAdmin();const newLi=courseModules[mi].lessons.findIndex(l=>l.id===data.id);openLessonModal(moduleId,mi,newLi);}
+}
+
+function openLessonModal(moduleId,mi,li){
+  const lesson=courseModules[mi].lessons[li];
+  document.getElementById('efLessonId').value=lesson.id;
+  document.getElementById('efTitle').value=lesson.title;
+  document.getElementById('efDuration').value=lesson.duration;
+  document.getElementById('efDesc').value=lesson.description||'';
+  document.getElementById('lessonModalTitle').textContent='Editar: '+lesson.title;
+  editVFile=null;editVRemoved=false;
+  const vt=lesson.video_type||'youtube';
+  switchVTab(vt);
+  if(vt==='youtube')document.getElementById('efVideoYT').value=lesson.video_url||'';
+  if(vt==='vimeo')document.getElementById('efVideoVim').value=lesson.video_url||'';
+  if(vt==='upload'&&lesson.video_storage_path){
+    document.getElementById('videoCurrentName').textContent=lesson.video_storage_path.split('/').pop();
+    document.getElementById('videoCurrentFile').style.display='flex';
+    document.getElementById('videoDropZone').style.display='none';
+  }else{
+    document.getElementById('videoCurrentFile').style.display='none';
+    document.getElementById('videoDropZone').style.display='flex';
+  }
+  document.getElementById('videoFileInput').value='';
+  editRes=JSON.parse(JSON.stringify(lesson.resources||[]));
+  renderResEditor();
+  openModal('lessonModal');
+}
+
+document.getElementById('btnSaveLesson').addEventListener('click',async()=>{
+  const lid=document.getElementById('efLessonId').value;
+  const title=document.getElementById('efTitle').value.trim();
+  const duration=document.getElementById('efDuration').value.trim()||'10 min';
+  const desc=document.getElementById('efDesc').value.trim();
+  if(!title){showToast('⚠️ El título no puede estar vacío');return}
+  const btn=document.getElementById('btnSaveLesson');btn.disabled=true;btn.textContent='Guardando…';
+  const existL=courseModules.flatMap(m=>m.lessons).find(l=>l.id===lid);
+  let videoUrl='',videoType=editVTab,videoPath='';
+  if(editVTab==='youtube')videoUrl=document.getElementById('efVideoYT').value.trim();
+  else if(editVTab==='vimeo')videoUrl=document.getElementById('efVideoVim').value.trim();
+  else if(editVTab==='upload'){
+    if(editVFile){
+      showLoading(true,'Subiendo vídeo…');
+      const path=`lessons/${lid}/${Date.now()}_${editVFile.name}`;
+      const {error}=await sb.storage.from('course-videos').upload(path,editVFile,{upsert:true});
+      showLoading(false);
+      if(!error){videoPath=path;videoType='upload';}
+      else{showToast('❌ Error subiendo vídeo');btn.disabled=false;btn.textContent='Guardar cambios ✓';return}
+    }else if(!editVRemoved&&existL?.video_storage_path){videoPath=existL.video_storage_path;videoType='upload';}
+  }
+  await sb.from('lessons').update({title,duration,description:desc,video_url:videoUrl,video_type:videoType,video_storage_path:videoPath,updated_at:new Date().toISOString()}).eq('id',lid);
+  await sb.from('resources').delete().eq('lesson_id',lid);
+  for(let i=0;i<editRes.length;i++){
+    const r=editRes[i];let sp=r.storage_path||'';
+    if(r._newFile){
+      const rp=`resources/${lid}/${Date.now()}_${r._newFile.name}`;
+      const {error}=await sb.storage.from('course-resources').upload(rp,r._newFile,{upsert:true});
+      if(!error)sp=rp;
+    }
+    await sb.from('resources').insert({lesson_id:lid,name:r.name||'Recurso',type:r.type||'PDF',icon:r.icon||'📄',url:r.url||'',storage_path:sp,order_index:i+1});
+  }
+  await loadCourseData();buildAdmin();buildSidebar();
+  closeModal('lessonModal');showToast('✅ Lección guardada');
+  btn.disabled=false;btn.textContent='Guardar cambios ✓';
+});
+
+function confirmDelLesson(lid,title){
+  showConfirm('🗑️','¿Eliminar lección?',`"${title}" se borrará permanentemente.`,async()=>{
+    await sb.from('lessons').delete().eq('id',lid);
+    await loadCourseData();buildAdmin();buildSidebar();buildDashboard();updateHeader();
+    showToast('🗑️ Lección eliminada');
+  });
+}
+
+/* ── VIDEO TABS ── */
+function switchVTab(tab){
+  editVTab=tab;
+  ['youtube','vimeo','upload'].forEach(t=>{
+    const k={youtube:'YT',vimeo:'Vim',upload:'Up'}[t];
+    document.getElementById('vtab'+k).classList.toggle('active',t===tab);
+    document.getElementById('vSrc'+k).style.display=t===tab?'block':'none';
+  });
+}
+document.getElementById('videoFileInput').addEventListener('change',function(){if(this.files[0])handleVFile(this.files[0])});
+const vdz=document.getElementById('videoDropZone');
+vdz.addEventListener('dragover',e=>{e.preventDefault();vdz.classList.add('drag-over')});
+vdz.addEventListener('dragleave',()=>vdz.classList.remove('drag-over'));
+vdz.addEventListener('drop',e=>{e.preventDefault();vdz.classList.remove('drag-over');if(e.dataTransfer.files[0])handleVFile(e.dataTransfer.files[0])});
+function handleVFile(file){
+  editVFile=file;editVRemoved=false;
+  document.getElementById('videoCurrentName').textContent=file.name;
+  document.getElementById('videoCurrentFile').style.display='flex';
+  document.getElementById('videoDropZone').style.display='none';
+}
+document.getElementById('videoRmBtn').addEventListener('click',()=>{
+  editVFile=null;editVRemoved=true;
+  document.getElementById('videoCurrentFile').style.display='none';
+  document.getElementById('videoDropZone').style.display='flex';
+  document.getElementById('videoFileInput').value='';
+});
+
+/* ── RESOURCES EDITOR ── */
+function renderResEditor(){
+  const c=document.getElementById('resEditorList');c.innerHTML='';
+  editRes.forEach((r,ri)=>{
+    const row=document.createElement('div');row.className='res-edit-row';
+    const fn=r._newFile?r._newFile.name:(r.storage_path?r.storage_path.split('/').pop():'');
+    row.innerHTML=`
+      <input class="res-icon-inp" type="text" value="${r.icon||'📄'}" maxlength="2">
+      <div class="res-fields">
+        <input type="text" value="${r.name||''}" placeholder="Nombre del recurso">
+        <input class="sm" type="text" value="${r.type||''}" placeholder="Tipo (PDF, XLSX, LINK…)">
+        <input class="sm" type="text" value="${r.url||''}" placeholder="URL externa (deja vacío si subes archivo)">
+        <div style="display:flex;align-items:center;gap:8px;margin-top:2px">
+          <span style="font-size:11px;color:var(--text-muted);flex:1">${fn?'📎 '+fn:'Sin archivo'}</span>
+          <label style="padding:4px 10px;background:var(--bg4);border:1px solid var(--border);border-radius:6px;color:var(--text-muted);font-size:11px;cursor:pointer;position:relative">
+            📂 Subir<input type="file" style="position:absolute;inset:0;opacity:0;cursor:pointer" onchange="handleResFile(${ri},this)">
+          </label>
+        </div>
+      </div>
+      <button class="res-del" onclick="delRes(${ri})">✕</button>`;
+    row.querySelector('.res-icon-inp').addEventListener('input',e=>editRes[ri].icon=e.target.value);
+    row.querySelectorAll('input[type=text]')[0].addEventListener('input',e=>editRes[ri].name=e.target.value);
+    row.querySelectorAll('input[type=text]')[1].addEventListener('input',e=>editRes[ri].type=e.target.value);
+    row.querySelectorAll('input[type=text]')[2].addEventListener('input',e=>editRes[ri].url=e.target.value);
+    c.appendChild(row);
+  });
+}
+document.getElementById('btnAddRes').addEventListener('click',()=>{editRes.push({icon:'📄',name:'',type:'PDF',url:'',storage_path:''});renderResEditor();});
+function delRes(ri){editRes.splice(ri,1);renderResEditor();}
+function handleResFile(ri,input){
+  if(!input.files[0])return;
+  const f=input.files[0];
+  editRes[ri]._newFile=f;editRes[ri].name=editRes[ri].name||f.name;
+  editRes[ri].type=f.name.split('.').pop().toUpperCase();editRes[ri].url='';editRes[ri].storage_path='';
+  renderResEditor();
+}
+
+/* ── MODALS ── */
+function openModal(id){document.getElementById(id).classList.add('open')}
+function closeModal(id){document.getElementById(id).classList.remove('open')}
+document.querySelectorAll('.modal-overlay').forEach(ov=>ov.addEventListener('click',e=>{if(e.target===ov)closeModal(ov.id)}));
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-overlay.open').forEach(m=>closeModal(m.id))});
+let confirmCb=null;
+function showConfirm(icon,title,msg,cb){
+  confirmCb=cb;
+  document.getElementById('confirmIcon').textContent=icon;
+  document.getElementById('confirmTitle').textContent=title;
+  document.getElementById('confirmMsg').textContent=msg;
+  openModal('confirmModal');
+}
+document.getElementById('confirmOkBtn').addEventListener('click',()=>{closeModal('confirmModal');if(confirmCb)confirmCb();});
+
+/* ── LOADING + TOAST + CONFETTI ── */
+function showLoading(on,txt='Cargando…'){
+  document.getElementById('loadingText').textContent=txt;
+  document.getElementById('loadingOverlay').classList.toggle('show',on);
+}
+let toastT;
+function showToast(msg){
+  const t=document.getElementById('toast');t.textContent=msg;
+  t.classList.add('show');clearTimeout(toastT);
+  toastT=setTimeout(()=>t.classList.remove('show'),3500);
+}
+function triggerConfetti(){
+  const c=document.getElementById('confetti-container');
+  const cols=['#FF6B2B','#CC4A10','#F5F0EB','#ffcc00','#ff4488','#44ddff'];
+  for(let i=0;i<80;i++){
+    const p=document.createElement('div');p.className='confetti-piece';
+    p.style.cssText=`left:${Math.random()*100}%;background:${cols[Math.floor(Math.random()*cols.length)]};width:${6+Math.random()*8}px;height:${10+Math.random()*10}px;border-radius:${Math.random()>.5?'50%':'2px'};animation-duration:${1.5+Math.random()*2}s;animation-delay:${Math.random()*.5}s;`;
+    c.appendChild(p);p.addEventListener('animationend',()=>p.remove());
+  }
+}
+
+/* ── HAMBURGER ── */
+const ham=document.getElementById('hamburger'),sb2=document.getElementById('sidebar'),sov=document.getElementById('sidebarOverlay');
+ham.addEventListener('click',()=>{const o=sb2.classList.toggle('mobile-open');ham.classList.toggle('open',o);sov.style.display=o?'block':'none'});
+sov.addEventListener('click',closeMobileSidebar);
+function closeMobileSidebar(){sb2.classList.remove('mobile-open');ham.classList.remove('open');sov.style.display='none'}
+</script>
+</body>
+</html>
